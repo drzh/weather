@@ -3,9 +3,9 @@
 # Usage: prog lat_min lat_max lon_min lon_max data_min data_max FLOAT_step_in_lat_lon lat_lon.xz data.xz out.xz
 
 import sys
+import getopt
 import lzma
 import numpy as np
-import getopt
 import pandas as pd
 import itertools
 import pickle
