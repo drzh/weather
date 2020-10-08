@@ -16,7 +16,7 @@ try :
                                'l:d:o:',
                                ['latmin=', 'latmax=', 'lonmin=', 'lonmax=',
                                 'dmin=', 'dmax=', 'latlon=', 'data=',
-                                'step=', 'scale=', 'out='
+                                'step=', 'scale=', 'out=', 'list='
                                ]
     )
 except getopt.GetoptError as err :
@@ -34,6 +34,7 @@ dscale = 1
 flat = ''
 fdata = ''
 fo = ''
+flist = ''
 
 for o, a in opts :
     if o == '--latmin' :
@@ -58,61 +59,70 @@ for o, a in opts :
         fdata = a
     elif o in ('-o', '--out') :
         fo = a
+    elif o == '--list' :
+        flist = a
     else :
         assert False, 'unhandled option'
 
-if (flat == '' or
-    fdata == '' or
-    fo == ''
-    ) :
+# main function -- begin --
+def extract(flat, fdata, fo) :
+    # read in lon, lat and data
+    with lzma.open(flat, 'rb') as f :
+        lat_lon = np.load(f)
+    with lzma.open(fdata, 'rb') as f :
+        data = np.load(f)
+    lat = lat_lon[0]
+    lon = lat_lon[1]
+
+    # Re-scale the data
+    if dscale != 1 and dscale != 0 :
+        data = data * dscale
+
+    if (len(lat.shape) != len(lon.shape) or
+        lat.shape != lon.shape or
+        len(lat.shape) != len(data.shape) or
+        lat.shape != data.shape
+) :
+        print(fdata, 'lat, lon and data are not in the same length', file = sys.stderr)
+        sys.exit(1)
+
+    dataall = pd.DataFrame(zip(lat, lon, data), columns = ['lat', 'lon', 'data'])
+    dataall = dataall[(dataall['lat'] >= latmin) & (dataall['lat'] < latmax) &
+                      (dataall['lon'] >= lonmin) & (dataall['lon'] < lonmax) &
+                      (dataall['data'] >= dmin) & (dataall['data'] < dmax)]
+    dataall['lat'] = np.floor(dataall['lat'] / step) * step
+    dataall['lat'] = [round(x, 1) for x in dataall['lat']]
+    dataall['lon'] = np.floor(dataall['lon'] / step) * step
+    dataall['lon'] = [round(x, 1) for x in dataall['lon']]
+    datamean = pd.DataFrame(dataall.groupby(['lat', 'lon'])['data'].mean().reset_index())
+    latbs = [round(x, 1) for x in np.arange(latmin, latmax, step)]
+    lonbs = [round(x, 1) for x in np.arange(lonmin, lonmax, step)]
+    latlon = pd.DataFrame(list(itertools.product(latbs, lonbs)), columns = ['lat', 'lon'])
+
+    if latlon.shape[0] == datamean.shape[0] :
+        # Merge latlon and datamean to ensure the datamean was ordered by latlon
+        datamean = pd.merge(latlon, datamean, on=['lat', 'lon'])
+        if latlon.shape[0] == datamean.shape[0] :
+            vec = np.array(datamean['data'], dtype=np.uint16)
+            dataout = [latbs, lonbs, vec]
+            with lzma.open(fo, 'wb') as f :
+                pickle.dump(dataout, f)
+        else :
+            print(fdata, 'is NA ', datamean.shape, file = sys.stderr)
+    else :
+        print(fdata, 'is NA ', datamean.shape, file = sys.stderr)
+        
+# main function -- end --
+
+if flist != '' :
+    with open(flist, 'r') as f :
+        for line in f :
+            flat, fdata, fo  = line.strip().split('\t')
+            if flat != '' and fdata != '' and fo != '' :
+                extract(flat, fdata, fo)
+elif flat != '' and fdata != '' and fo != '' :
+    extract(flat, fdata, fo)
+else :
     print('No enough input and output files', flat, fdata, fo, file = sys.stderr)
     sys.exit(1)
 
-# read in lon, lat and data
-with lzma.open(flat, 'rb') as f :
-    lat_lon = np.load(f)
-with lzma.open(fdata, 'rb') as f :
-    data = np.load(f)
-
-lat = lat_lon[0]
-lon = lat_lon[1]
-
-# Re-scale the data
-if dscale != 1 and dscale != 0 :
-    data = data * dscale
-
-if (len(lat.shape) != len(lon.shape) or
-    lat.shape != lon.shape or
-    len(lat.shape) != len(data.shape) or
-    lat.shape != data.shape
-) :
-    print(fdata, 'lat, lon and data are not in the same length', file = sys.stderr)
-    sys.exit(1)
-
-dataall = pd.DataFrame(zip(lat, lon, data), columns = ['lat', 'lon', 'data'])
-dataall = dataall[(dataall['lat'] >= latmin) & (dataall['lat'] < latmax) &
-                  (dataall['lon'] >= lonmin) & (dataall['lon'] < lonmax) &
-                  (dataall['data'] >= dmin) & (dataall['data'] < dmax)]
-dataall['lat'] = np.floor(dataall['lat'] / step) * step
-dataall['lat'] = [round(x, 1) for x in dataall['lat']]
-dataall['lon'] = np.floor(dataall['lon'] / step) * step
-dataall['lon'] = [round(x, 1) for x in dataall['lon']]
-
-datamean = pd.DataFrame(dataall.groupby(['lat', 'lon'])['data'].mean().reset_index())
-    
-latbs = [round(x, 1) for x in np.arange(latmin, latmax, step)]
-lonbs = [round(x, 1) for x in np.arange(lonmin, lonmax, step)]
-latlon = pd.DataFrame(list(itertools.product(latbs, lonbs)), columns = ['lat', 'lon'])
-
-if latlon.shape[0] == datamean.shape[0] :
-    # Merge latlon and datamean to ensure the datamean was ordered by latlon
-    datamean = pd.merge(latlon, datamean, on=['lat', 'lon'])
-    if latlon.shape[0] == datamean.shape[0] :
-        vec = np.array(datamean['data'], dtype=np.uint16)
-        dataout = [latbs, lonbs, vec]
-        with lzma.open(fo, 'wb') as f :
-            pickle.dump(dataout, f)
-    else :
-        print(fdata, 'is NA ', datamean.shape, file = sys.stderr)
-else :
-    print(fdata, 'is NA ', datamean.shape, file = sys.stderr)

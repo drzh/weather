@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# Usage: prog FILE_pickle_xz | <STDOUT>
+# Usage: <STDIN_file_list> | prog | <STDOUT>
 # Usage: Calculate the statistics
 
 import sys
@@ -8,9 +8,16 @@ import lzma
 import pickle
 import numpy as np
 
-_, fi = sys.argv
-
-with lzma.open(fi, 'rb') as f :
-    data = pickle.load(f)
-
-print(len(data))
+for line in sys.stdin :
+    fn = line.strip()
+    with lzma.open(fn, 'rb') as f :
+        data = pickle.load(f)
+        if len(data) >= 3 :
+            tem = data[2]
+            print(fn,
+                  int(round(np.mean(tem))),
+                  int(round(np.std(tem))),
+                  np.amin(tem),
+                  np.amax(tem),
+                  sep = '\t'
+            )
