@@ -114,6 +114,7 @@ def extract(flat, fdata, fo) :
         
 # main function -- end --
 
+# process the inputs
 if flist != '' :
     with open(flist, 'r') as f :
         for line in f :
