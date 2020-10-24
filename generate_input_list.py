@@ -11,7 +11,8 @@ import getopt
 import numpy as np
 
 # define channels
-chs = ['C07', 'C08', 'C09', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15', 'C16']
+trainchs = ['C07', 'C08', 'C09', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15', 'C16']
+predchs = ['C13',]
 
 # Parsing parameters
 try:
@@ -75,12 +76,12 @@ for line in f:
         n = 0
         # add training
         while n < ns:
-            fs = ','.join([tprefix + e[t] + '.' + c + tsuffix for c in chs])
+            fs = ','.join([tprefix + e[t] + '.' + c + tsuffix for c in trainchs])
             train.append(fs)
             n += 1
             t += s1
         # add prediction
-        fs = ','.join([pprefix + e[tpred] + '.' + c + psuffix for c in chs])
+        fs = ','.join([pprefix + e[tpred] + '.' + c + psuffix for c in predchs])
         pred = fs
         # output
         print('\t'.join(train), pred, sep='\t')
