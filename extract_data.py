@@ -82,7 +82,7 @@ def extract(flat, fdata, fo) :
         lat.shape != lon.shape or
         len(lat.shape) != len(data.shape) or
         lat.shape != data.shape
-) :
+    ):
         print(fdata, 'lat, lon and data are not in the same length', file = sys.stderr)
         sys.exit(1)
 
