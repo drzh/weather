@@ -10,33 +10,29 @@ nt = 10
 
 rec = {}
 cnt = {}
-for line in sys.stdin :
+for line in sys.stdin:
     line = line.strip()
     e = line.split('\t')
-    e[5] = int(e[5])
-    if e[5] not in rec :
-        rec[e[5]] = []
-        cnt[e[5]] = 0
-    rec[e[5]].append(line)
-    cnt[e[5]] += 1
+    e[3] = int(e[3])
+    if e[3] not in rec:
+        rec[e[3]] = []
+        cnt[e[3]] = 0
+    rec[e[3]].append(e[0])
+    cnt[e[3]] += 1
 
-def output(fo, x) :
-    with open(fo, 'w') as f :
-        i = 0
-        for e1 in x :
-            i += 1
-            for e2 in e1 :
-                print(e2, i, sep='\t', file=f)
-    f.close()
+def output(fo, x):
+    with open(fo, 'w') as f:
+        for e in x:
+            print('\t'.join(e), file=f)
             
 k0 = -1
 out = []
 i = 0;
-for k in rec :
+for k in sorted(rec.keys()):
     # print(k, out)
-    if cnt[k] == nt :
-        if k0 > 0 :
-            if k - k0 < 270 or k - k0 > 330 :
+    if cnt[k] == nt:
+        if k0 > 0:
+            if k - k0 < 270 or k - k0 > 330:
                 outf = fo + '.' + str(i)
                 output(outf, out)
                 out = []
