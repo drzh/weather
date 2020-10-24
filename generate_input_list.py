@@ -1,11 +1,10 @@
 #!/home2/s167968/bin/python3
 
-# Usage: <STDIN_time_group> | prog -o FILE_out
+# Usage: <STDIN_time_group> | prog | <STDOUT>
 #     --step1 : step between adjacent time slots of training
 #     --step2 : step between last time slot of training and the time slot of prediction
 #     --step3 : step between the first time slot of the training group and the first time slot of the next training group
 #     --ns : number of slices of training
-#     -o : output file
 
 import sys
 import getopt
