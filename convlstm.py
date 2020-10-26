@@ -1,5 +1,9 @@
 #!/usr/bin/python3
 
+"""
+    Reference: https://github.com/ndrplz/ConvLSTM_pytorch/
+"""
+
 import sys
 import torch
 import torch.nn as nn
