@@ -35,16 +35,16 @@ class ConvLSTMCell(nn.Module):
                               bias = self.bias)
 
     def forward(self, input_tensor, cur_state):
-        h_cur, c_cur - cur_state
+        h_cur, c_cur = cur_state
 
         # Concatenate along channel axis
         combined = torch.cat([input_tensor, h_cur], dim = 1)
 
         combined_conv = self.conv(combined)
-        cc_i, cc_f, cc_o, cc_g = torch.split
-        i = torch.sigmod(cc_i)
-        f = torch.sigmod(cc_f)
-        o = torch.sigmod(cc_o)
+        cc_i, cc_f, cc_o, cc_g = torch.split(combined_conv, self.hidden_dim, dim = 1)
+        i = torch.sigmoid(cc_i)
+        f = torch.sigmoid(cc_f)
+        o = torch.sigmoid(cc_o)
         g = torch.tanh(cc_g)
 
         c_next = f * c_cur + i * g
@@ -107,7 +107,10 @@ class ConvLSTM(nn.Module):
         self.hidden_dim = hidden_dim
         self.kernel_size = kernel_size
         self.num_layers = num_layers
-
+        self.batch_first = batch_first
+        self.bias = bias
+        self.return_all_layers = return_all_layers
+        
         cell_list = []
         for i in range(0, self.num_layers):
             cur_input_dim = self.input_dim if i == 0 else self.hidden_dim[i - 1]
@@ -161,7 +164,7 @@ class ConvLSTM(nn.Module):
             layer_output_list.append(layer_output)
             last_state_list.append([h, c])
 
-        if not slef.return_all_layers:
+        if not self.return_all_layers:
             layer_output_list = layer_output_list[-1:]
             last_state_list = last_state_list[-1:]
 
@@ -173,12 +176,14 @@ class ConvLSTM(nn.Module):
             init_states.append(self.cell_list[i].init_hidden(batch_size, image_size))
         return init_states
 
+    @staticmethod
     def _check_kernel_size_consistency(kernel_size):
         if not (isinstance(kernel_size, tuple) or
                 (isinstance(kernel_size, list) and
                  all([isinstance(elem, tuple) for elem in kernel_size]))):
             raise ValueError('"kernel_size" must be tuple or list of tuples')
 
+    @staticmethod
     def _extend_for_multilayer(param, num_layers):
         if not isinstance(param, list):
             param = [param] * num_layers
