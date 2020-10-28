@@ -12,6 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from readdata import readdata
 from convlstm import ConvLSTM
+from axial_attention import AxialAttention
 
 # Function to print error
 def eprint(msg):
@@ -64,7 +65,7 @@ class WLSTM(nn.Module):
 
         # ConvLSTM model
         self.convlstm = ConvLSTM(input_dim = 256,
-                                 hidden_dim = 256,
+                                 hidden_dim = 384,
                                  kernel_size = (3, 3),
                                  num_layers = 1,
                                  batch_first = True,
@@ -102,10 +103,12 @@ for xtrain, ytrain in readdata(fl, mean, sd):
     xtrain, ytrain = torch.Tensor([xtrain]), torch.Tensor(ytrain)
     optimizer.zero_grad()
     layer_output, last_state = model(xtrain)
-    # last_h = last_state[0][0]
-    print(layer_output[0].size())
-    print('---------')
-    print(last_state[0][0].size())
-    print('---------')
-    print(last_state[0][1].size())
+    ypred = last_state[0][0]
+    print(ypred.size())
+    print(ytrain.size())
+    # print(layer_output[0].size())
+    # print('---------')
+    # print(last_state[0][0].size())
+    # print('---------')
+    # print(last_state[0][1].size())
     sys.exit(0)
