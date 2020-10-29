@@ -10,6 +10,7 @@ import getopt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from datetime import datetime
 from readdata import readdata
 from convlstm import ConvLSTM
 from axial_attention import AxialAttention
@@ -22,7 +23,8 @@ def eprint(msg):
 try :
     opts, args = getopt.getopt(sys.argv[1:],
                                'm:s:l:o:',
-                               ['mean=', 'sd=', 'list=', 'out='
+                               ['mean=', 'sd=', 'list=', 'out=',
+                                'lr=', 'model=', 'dev='
                                ]
     )
 except getopt.GetoptError as err :
@@ -31,6 +33,9 @@ except getopt.GetoptError as err :
 
 mean = 0
 sd = 1
+lr = 0.001
+dev = 'cuda:0'
+fm = ''
 fl = '/dev/stdin'
 fo = ''
 
@@ -39,6 +44,12 @@ for o, a in opts:
         mean = float(a)
     elif o in ('-s', '--sd'):
         sd = float(a)
+    elif o in ('--lr'):
+        lr = float(a)
+    elif o in ('--dev'):
+        dev = a
+    elif o in ('--model'):
+        fm = a
     elif o in ('-l', '--list'):
         fl = a
     elif o in ('-o', '--out'):
@@ -46,13 +57,26 @@ for o, a in opts:
     else:
         assert False, 'unhandled option'
 
-# Function to scale temperature (181 ~ 330) to group (0 ~ 149)
+# Prepare GPU
+device = torch.device(dev if torch.cuda.is_available() else "cpu")
+print('Using', device, file = sys.stderr)
+
+# # Function to scale temperature (181 ~ 330) to group (0 ~ 149)
+# def scale_group(x):
+#     x = torch.round(x / 100 - 181)
+#     if x < 0:
+#         x = 0
+#     elif x > 149:
+#         x = 149
+#     return x
+
+# Function to scale temperature (181 ~ 330) to group (0 ~ 49)
 def scale_group(x):
-    x = torch.round(x / 100 - 181)
+    x = torch.round((x / 100 - 181) / 3)
     if x < 0:
         x = 0
-    elif x > 149:
-        x = 149
+    elif x > 49:
+        x = 49
     return x
 
 # Define a model
@@ -69,8 +93,9 @@ class WLSTM(nn.Module):
         self.conv2 = nn.Conv2d(160, 256, 3, padding = (1, 1))
         self.conv3 = nn.Conv2d(256, 256, 3, padding = (1, 1))
         self.conv4 = nn.Conv2d(256, 256, 3, padding = (1, 1))
-        self.conv5 = nn.Conv2d(384, 2048, 1)
-        self.conv6 = nn.Conv2d(2048, 150, 1)
+        # self.conv5 = nn.Conv2d(384, 512, 1)
+        # self.conv6 = nn.Conv2d(512, 150, 1)
+        self.conv7 = nn.Conv2d(384, 50, 1)
 
         # ConvLSTM model
         self.convlstm = ConvLSTM(input_dim = 256,
@@ -115,9 +140,10 @@ class WLSTM(nn.Module):
         layer_output, last_state = self.convlstm(xb)
         h = last_state[0][0]
 
-        # convert b x 384 x 64 x 64 to b x 384 x 64 x 64
-        y = F.relu(self.conv5(h))
-                                    
+        # # convert b x 384 x 64 x 64 to b x 512 x 64 x 64
+        # y = F.relu(self.conv5(h))
+        y = h
+        
         # Axial self attension
         y = self.attn1(y)
         y = self.attn2(y)
@@ -129,20 +155,30 @@ class WLSTM(nn.Module):
         y = self.attn2(y)
 
         # Convert to 150 x 64 x 64 to represent probability for each unit
-        y = self.conv6(y)
+        # y = self.conv6(y)
+        y = self.conv7(y)
         
         return y
 
-# Create a model
-model = WLSTM()
+if fm == '':
+    # Create a model
+    model = WLSTM()
+else:
+    with lzma.open(fm, 'rb') as f:
+        model = pickle.load(f)
+
+# Send data to GPU
+model.to(device)
 
 # Create loss function and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr = lr)
 
+# Train the model
 i = 0
 for xtrain, ytrain in readdata(fl, mean, sd):
-    xtrain, ytrain = torch.Tensor([xtrain]), torch.Tensor(ytrain)
+    xtrain = torch.Tensor([xtrain]).to(device)
+    ytrain = torch.Tensor(ytrain)
     optimizer.zero_grad()
     ypred = model(xtrain)
 
@@ -155,20 +191,19 @@ for xtrain, ytrain in readdata(fl, mean, sd):
     ytrain = torch.flatten(ytrain, 1)
     ytrain = torch.flatten(ytrain, 0, 1)
 
-    # Label ytrain from (181 ~ 330) to group (0 ~ 149)
+    # Label ytrain from (181 ~ 330) to group (0 ~ 49)
     ylabel = torch.Tensor([scale_group(x) for x in ytrain]).long()
-
+    ylabel = ylabel.to(device)
+    
     loss = criterion(ypred, ylabel)
     loss.backward()
     optimizer.step()
-    print('echoch', i, 'loss:', loss.item())
+
+    # Print epoch information
+    print(datetime.now().strftime('%H:%M:%S'), 'epoch', i, 'loss:', '%.8f' % loss.item())
     i += 1
 
-    # print(ypred.size())
-    # print(ytrain.size())
-    # print(layer_output[0].size())
-    # print('---------')
-    # print(last_state[0][0].size())
-    # print('---------')
-    # print(last_state[0][1].size())
-    # sys.exit(0)
+# Export model
+if fo != '':
+    with lzma.open(fo, 'wb') as f:
+        pickle.dump(model, f)
