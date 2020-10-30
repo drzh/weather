@@ -6,7 +6,7 @@ import lzma
 import pickle
 
 # Function to read file and return matrix
-def readfi(fi, mean, sd):
+def readfi(fi):
     with lzma.open(fi, 'rb') as f:
         data = pickle.load(f)
         tem = []
@@ -14,14 +14,10 @@ def readfi(fi, mean, sd):
             d1 = len(data[0])
             d2 = len(data[1])
             tem = data[2].reshape(d1, d2)
-            # Scale the data
-            if mean != 0:
-                tem = tem - mean
-            if sd > 0 and sd != 1:
-                tem = tem / sd
         return tem
 
-def readdata(flist, mean = 0, sd = 1):
+# def readdata(flist, mean = 0, sd = 1):
+def readdata(flist):
     with open(flist, 'r') as f:
         for line in f:
             line = line.strip()
@@ -36,13 +32,13 @@ def readdata(flist, mean = 0, sd = 1):
                 tc = []
                 # Process channels in the same time slot
                 for f in ft.split(','):
-                    dmat = readfi(f, mean, sd)
+                    dmat = readfi(f)
                     tc.append(dmat)
                 train.append(tc)
 
             # Process prediction files
             for f in fp.split(','):
-                dmat = readfi(f, mean, sd)
+                dmat = readfi(f)
                 pred.append(dmat)
 
             # yield output

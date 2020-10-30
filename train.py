@@ -61,23 +61,32 @@ for o, a in opts:
 device = torch.device(dev if torch.cuda.is_available() else "cpu")
 print('Using', device, file = sys.stderr)
 
-# # Function to scale temperature (181 ~ 330) to group (0 ~ 149)
+# # Function to scale temperature (223 ~ 322) to group (0 ~ 99)
 # def scale_group(x):
-#     x = torch.round(x / 100 - 181)
+#     x = torch.round(x / 100 - 223)
 #     if x < 0:
 #         x = 0
-#     elif x > 149:
-#         x = 149
+#     elif x > 99:
+#         x = 99
 #     return x
 
-# Function to scale temperature (181 ~ 330) to group (0 ~ 49)
+# Function to scale temperature (181 ~ 330) to group (0 ~ 149)
 def scale_group(x):
-    x = torch.round((x / 100 - 181) / 3)
+    x = torch.round(x / 100 - 181)
     if x < 0:
         x = 0
-    elif x > 49:
-        x = 49
+    elif x > 149:
+        x = 149
     return x
+
+# # Function to scale temperature (181 ~ 330) to group (0 ~ 49)
+# def scale_group(x):
+#     x = torch.round((x / 100 - 181) / 3)
+#     if x < 0:
+#         x = 0
+#     elif x > 49:
+#         x = 49
+#     return x
 
 # Define a model
 class WLSTM(nn.Module):
@@ -93,10 +102,17 @@ class WLSTM(nn.Module):
         self.conv2 = nn.Conv2d(160, 256, 3, padding = (1, 1))
         self.conv3 = nn.Conv2d(256, 256, 3, padding = (1, 1))
         self.conv4 = nn.Conv2d(256, 256, 3, padding = (1, 1))
-        # self.conv5 = nn.Conv2d(384, 512, 1)
-        # self.conv6 = nn.Conv2d(512, 150, 1)
-        self.conv7 = nn.Conv2d(384, 50, 1)
 
+        # self.conv1 = nn.Conv2d(input_dim, 128, 3, padding = (1, 1))
+        # self.conv2 = nn.Conv2d(128, 128, 3, padding = (1, 1))
+        # self.conv3 = nn.Conv2d(128, 128, 3, padding = (1, 1))
+        # self.conv4 = nn.Conv2d(128, 128, 3, padding = (1, 1))
+
+        self.conv5 = nn.Conv2d(384, 512, 1)
+        self.conv6 = nn.Conv2d(512, 150, 1)
+
+        self.conv7 = nn.Conv2d(384, 150, 1)
+        
         # ConvLSTM model
         self.convlstm = ConvLSTM(input_dim = 256,
                                  hidden_dim = 384,
@@ -135,14 +151,14 @@ class WLSTM(nn.Module):
             y = F.max_pool2d(y, 2)
             xb.append(y)
 
-        # b x t x 128 x 64 x 64 to get through ConvLSTM
+        # b x t x 256 x 64 x 64 to get through ConvLSTM
         xb = torch.stack(xb, dim = 0)
         layer_output, last_state = self.convlstm(xb)
         h = last_state[0][0]
 
-        # # convert b x 384 x 64 x 64 to b x 512 x 64 x 64
-        # y = F.relu(self.conv5(h))
-        y = h
+        # # convert b x 384 x 64 x 64 to b x 2048 x 64 x 64
+        y = F.relu(self.conv5(h))
+        # y = h
         
         # Axial self attension
         y = self.attn1(y)
@@ -155,8 +171,8 @@ class WLSTM(nn.Module):
         y = self.attn2(y)
 
         # Convert to 150 x 64 x 64 to represent probability for each unit
-        # y = self.conv6(y)
-        y = self.conv7(y)
+        y = self.conv6(y)
+        # y = self.conv7(y)
         
         return y
 
@@ -176,11 +192,22 @@ optimizer = torch.optim.Adam(model.parameters(), lr = lr)
 
 # Train the model
 i = 0
-for xtrain, ytrain in readdata(fl, mean, sd):
+# for xtrain, ytrain in readdata(fl, mean, sd):
+for xtrain, ytrain in readdata(fl):
+    # Scale the data
+    xtrain = np.asarray(xtrain)
+    if mean != 0:
+        xtrain = xtrain - mean
+    if sd > 0 and sd != 1:
+        xtrain = xtrain / sd
+
     xtrain = torch.Tensor([xtrain]).to(device)
     ytrain = torch.Tensor(ytrain)
+    
     optimizer.zero_grad()
     ypred = model(xtrain)
+
+    # sys.exit(0)
 
     # Reshape ypred
     ypred = torch.flatten(ypred, 2)
@@ -191,13 +218,19 @@ for xtrain, ytrain in readdata(fl, mean, sd):
     ytrain = torch.flatten(ytrain, 1)
     ytrain = torch.flatten(ytrain, 0, 1)
 
-    # Label ytrain from (181 ~ 330) to group (0 ~ 49)
+    # Label ytrain from (181 ~ 330) to group (0 ~ 149)
     ylabel = torch.Tensor([scale_group(x) for x in ytrain]).long()
     ylabel = ylabel.to(device)
     
     loss = criterion(ypred, ylabel)
     loss.backward()
     optimizer.step()
+
+    # print(loss)
+    # print(ytrain)
+    # print(ylabel)
+    # print(ypred)
+    # sys.exit(0)
 
     # Print epoch information
     print(datetime.now().strftime('%H:%M:%S'), 'epoch', i, 'loss:', '%.8f' % loss.item())
