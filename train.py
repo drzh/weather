@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# Usage: porg -m FLOAT_mean -s FLOAT_sd -l FILE_list -o FILE_out.xz
+# Usage: porg -m FLOAT_mean -s FLOAT_sd -l FILE_list -o FILE_out_prefix
 
 import sys
 import numpy as np
@@ -22,7 +22,7 @@ def eprint(msg):
 # Parsing parameters
 try :
     opts, args = getopt.getopt(sys.argv[1:],
-                               'm:s:l:o:',
+                               'm:s:l:o:n:',
                                ['mean=', 'sd=', 'list=', 'out=',
                                 'lr=', 'model=', 'dev='
                                ]
@@ -34,6 +34,7 @@ except getopt.GetoptError as err :
 mean = 0
 sd = 1
 lr = 0.001
+n = 1000
 dev = 'cuda:0'
 fm = ''
 fl = '/dev/stdin'
@@ -46,6 +47,8 @@ for o, a in opts:
         sd = float(a)
     elif o in ('--lr'):
         lr = float(a)
+    elif o in ('-n'):
+        n = int(a)
     elif o in ('--dev'):
         dev = a
     elif o in ('--model'):
@@ -191,7 +194,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr = lr)
 
 # Train the model
-i = 0
+i = 1
 # for xtrain, ytrain in readdata(fl, mean, sd):
 for xtrain, ytrain in readdata(fl):
     # Scale the data
@@ -234,9 +237,16 @@ for xtrain, ytrain in readdata(fl):
 
     # Print epoch information
     print(datetime.now().strftime('%H:%M:%S'), 'epoch', i, 'loss:', '%.8f' % loss.item())
-    i += 1
 
+    # Export model every n steps
+    if i % n == 0:
+        fout = fo + '.' + str(i) + '.xz'
+        with lzma.open(fout, 'wb') as f:
+            pickle.dump(model, f)
+    
+    i += 1
+    
 # Export model
-if fo != '':
-    with lzma.open(fo, 'wb') as f:
-        pickle.dump(model, f)
+fout = fo + '.' + str(i) + '.xz'
+with lzma.open(fout, 'wb') as f:
+    pickle.dump(model, f)
