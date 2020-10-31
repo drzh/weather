@@ -23,7 +23,8 @@ try :
     opts, args = getopt.getopt(sys.argv[1:],
                                'm:s:l:o:n:',
                                ['mean=', 'sd=', 'list=', 'out=',
-                                'lr=', 'model=', 'dev='
+                                'lr=', 'model=', 'dev=', 'ln=',
+                                'ld'
                                ]
     )
 except getopt.GetoptError as err :
@@ -32,7 +33,9 @@ except getopt.GetoptError as err :
 
 mean = 0
 sd = 1
-lr = 0.001
+lrt = 0.001
+ld = 0.9
+ln = 0
 n = 1000
 dev = 'cuda:0'
 fm = ''
@@ -45,7 +48,11 @@ for o, a in opts:
     elif o in ('-s', '--sd'):
         sd = float(a)
     elif o in ('--lr'):
-        lr = float(a)
+        lrt = float(a)
+    elif o in ('--ln'):
+        ln = int(a)
+    elif o in ('--ld'):
+        ld = float(a)
     elif o in ('-n'):
         n = int(a)
     elif o in ('--dev'):
@@ -63,13 +70,22 @@ for o, a in opts:
 device = torch.device(dev if torch.cuda.is_available() else "cpu")
 print('Using', device, file = sys.stderr)
 
-# Function to scale temperature (181 ~ 330) to group (0 ~ 149)
+# # Function to scale temperature (181 ~ 330) to group (0 ~ 149)
+# def scale_group(x):
+#     x = torch.round(x / 100 - 181)
+#     if x < 0:
+#         x = 0
+#     elif x > 149:
+#         x = 149
+#     return x
+
+# Function to scale temperature (200 ~ 299K) to group (0 ~ 19)
 def scale_group(x):
-    x = torch.round(x / 100 - 181)
+    x = torch.round((x / 100 - 200) / 5)
     if x < 0:
         x = 0
-    elif x > 149:
-        x = 149
+    elif x > 19:
+        x = 19
     return x
 
 model = WLSTM()
@@ -83,8 +99,10 @@ if fm != '':
 model.to(device)
 
 # Create loss function and optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr = lr)
+# criterion = nn.CrossEntropyLoss()
+criterion = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr = lrt)
+# optimizer = torch.optim.SGD(model.parameters(), lr=lrt, momentum=0.9)
 
 # Train the model
 i = 1
@@ -92,45 +110,57 @@ i = 1
 for xtrain, ytrain in readdata(fl):
     # Scale the data
     xtrain = np.asarray(xtrain)
+    ytrain = np.asarray(ytrain)
+    xtrain = xtrain.astype(float)
+    ytrain = ytrain.astype(float)
     if mean != 0:
         xtrain = xtrain - mean
+        ytrain = ytrain -mean
     if sd > 0 and sd != 1:
         xtrain = xtrain / sd
+        ytrain = ytrain / sd
 
     xtrain = torch.Tensor([xtrain]).to(device)
-    ytrain = torch.Tensor(ytrain)
+    ytrain = torch.Tensor(ytrain).to(device)
     
     optimizer.zero_grad()
     ypred = model(xtrain)
 
+    # print(ypred.size())
+    # print(ytrain.size())
     # sys.exit(0)
 
     # Reshape ypred
-    ypred = torch.flatten(ypred, 2)
-    ypred = torch.transpose(ypred, 1, 2)
-    ypred = torch.flatten(ypred, 0, 1)
+    # ypred = torch.flatten(ypred, 2)
+    # ypred = torch.transpose(ypred, 1, 2)
+    # ypred = torch.flatten(ypred, 0, 1)
+    ypred = torch.flatten(ypred)
 
     # Reshape ytrain
-    ytrain = torch.flatten(ytrain, 1)
-    ytrain = torch.flatten(ytrain, 0, 1)
+    # ytrain = torch.flatten(ytrain, 1)
+    # ytrain = torch.flatten(ytrain, 0, 1)
+    ytrain = torch.flatten(ytrain)
 
-    # Label ytrain from (181 ~ 330) to group (0 ~ 149)
-    ylabel = torch.Tensor([scale_group(x) for x in ytrain]).long()
-    ylabel = ylabel.to(device)
+    # # Clamp the min and max value for ytrain
+    # ytrain = troch.clamp(ytrain, -190, 320)
+
+    # # Label ytrain from (181 ~ 330) to group (0 ~ 149)
+    # ylabel = torch.Tensor([scale_group(x) for x in ytrain]).long()
+    # ylabel = ylabel.to(device)
     
-    loss = criterion(ypred, ylabel)
+    # loss = criterion(ypred, ylabel)
+    loss = criterion(ypred, ytrain)
     loss.backward()
     optimizer.step()
-
-    # print(loss)
-    # print(ytrain)
-    # print(ylabel)
-    # print(ypred)
-    # sys.exit(0)
 
     # Print epoch information
     print(datetime.now().strftime('%H:%M:%S'), 'epoch', i, 'loss:', '%.8f' % loss.item())
     sys.stdout.flush()
+
+    # # Update learning rate
+    # if ln > 0 and i % ln == 0:
+    #     lrt = lrt * ld
+    #     optimizer = torch.optim.Adam(model.parameters(), lr = lrt)
     
     # Export model state dict every n steps
     if i % n == 0:

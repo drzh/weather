@@ -18,17 +18,10 @@ class WLSTM(nn.Module):
         self.conv2 = nn.Conv2d(160, 256, 3, padding = (1, 1))
         self.conv3 = nn.Conv2d(256, 256, 3, padding = (1, 1))
         self.conv4 = nn.Conv2d(256, 256, 3, padding = (1, 1))
-
-        # self.conv1 = nn.Conv2d(input_dim, 128, 3, padding = (1, 1))
-        # self.conv2 = nn.Conv2d(128, 128, 3, padding = (1, 1))
-        # self.conv3 = nn.Conv2d(128, 128, 3, padding = (1, 1))
-        # self.conv4 = nn.Conv2d(128, 128, 3, padding = (1, 1))
-
         self.conv5 = nn.Conv2d(384, 512, 1)
-        self.conv6 = nn.Conv2d(512, 150, 1)
+        self.conv6 = nn.Conv2d(512, 1, 1)
+        # self.linear = nn.Linear(512 * 64 * 64, 64 * 64)
 
-        self.conv7 = nn.Conv2d(384, 150, 1)
-        
         # ConvLSTM model
         self.convlstm = ConvLSTM(input_dim = 256,
                                  hidden_dim = 384,
@@ -77,17 +70,17 @@ class WLSTM(nn.Module):
         # y = h
         
         # Axial self attension
-        y = self.attn1(y)
-        y = self.attn2(y)
-        y = self.attn1(y)
-        y = self.attn2(y)
-        y = self.attn1(y)
-        y = self.attn2(y)
-        y = self.attn1(y)
-        y = self.attn2(y)
+        y = F.relu(self.attn1(y))
+        y = F.relu(self.attn2(y))
+        y = F.relu(self.attn1(y))
+        y = F.relu(self.attn2(y))
+        y = F.relu(self.attn1(y))
+        y = F.relu(self.attn2(y))
+        y = F.relu(self.attn1(y))
+        y = F.relu(self.attn2(y))
 
         # Convert to 150 x 64 x 64 to represent probability for each unit
         y = self.conv6(y)
-        # y = self.conv7(y)
+        # y = self.linear(y)
         
         return y
