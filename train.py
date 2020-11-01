@@ -10,6 +10,7 @@ import getopt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.optim.lr_scheduler import StepLR
 from datetime import datetime
 from readdata import readdata
 from wlstm import WLSTM
@@ -24,7 +25,7 @@ try :
                                'm:s:l:o:n:',
                                ['mean=', 'sd=', 'list=', 'out=',
                                 'lr=', 'model=', 'dev=', 'ln=',
-                                'ld'
+                                'ld='
                                ]
     )
 except getopt.GetoptError as err :
@@ -34,7 +35,7 @@ except getopt.GetoptError as err :
 mean = 0
 sd = 1
 lrt = 0.001
-ld = 0.9
+ld = 0.5
 ln = 0
 n = 1000
 dev = 'cuda:0'
@@ -104,6 +105,9 @@ criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr = lrt)
 # optimizer = torch.optim.SGD(model.parameters(), lr=lrt, momentum=0.9)
 
+# Decays the learning rate according to epoch
+scheduler = StepLR(optimizer, step_size = ln, gamma = ld)
+
 # Train the model
 i = 1
 # for xtrain, ytrain in readdata(fl, mean, sd):
@@ -136,13 +140,13 @@ for xtrain, ytrain in readdata(fl):
     # ypred = torch.flatten(ypred, 0, 1)
     ypred = torch.flatten(ypred)
 
+    # Clamp the min and max value for ypred
+    # ypred = torch.clamp(ypred, 19000, 32000)
+
     # Reshape ytrain
     # ytrain = torch.flatten(ytrain, 1)
     # ytrain = torch.flatten(ytrain, 0, 1)
     ytrain = torch.flatten(ytrain)
-
-    # # Clamp the min and max value for ytrain
-    # ytrain = troch.clamp(ytrain, -190, 320)
 
     # # Label ytrain from (181 ~ 330) to group (0 ~ 149)
     # ylabel = torch.Tensor([scale_group(x) for x in ytrain]).long()
@@ -162,11 +166,17 @@ for xtrain, ytrain in readdata(fl):
     #     lrt = lrt * ld
     #     optimizer = torch.optim.Adam(model.parameters(), lr = lrt)
     
+    # Decays the learning rate
+    scheduler.step()
+    
     # Export model state dict every n steps
     if i % n == 0:
         fout = fo + '.state_dict.' + str(i) + '.pt'
         torch.save(model.state_dict(), fout)
-    
+        # Print learning rate
+        for param_group in optimizer.param_groups:
+            print('lr =', param_group['lr'])
+
     i += 1
     
 # Export model state dict in final step
