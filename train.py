@@ -109,56 +109,55 @@ scheduler = StepLR(optimizer, step_size = ln, gamma = ld)
 i = 0
 ibat = 0
 loss_sum = 0
-# for xtrain, ytrain in readdata(fl, mean, sd):
 for din in readdata(fl, bat):
-    for xtrain, ytrain in din:
-        i += 1
-        # Scale the data
-        xtrain = np.asarray(xtrain)
-        ytrain = np.asarray(ytrain)
-        xtrain = xtrain.astype(float)
-        ytrain = ytrain.astype(float)
-        if mean != 0:
-            xtrain = xtrain - mean
-            ytrain = ytrain -mean
-        if sd > 0 and sd != 1:
-            xtrain = xtrain / sd
-            ytrain = ytrain / sd
-                
-        xtrain = torch.Tensor([xtrain]).to(device)
-        ytrain = torch.Tensor(ytrain).to(device)
-    
-        ypred = model(xtrain)
+    ibat += 1
+    for ep in range(epo):
+        for xtrain, ytrain in din:
+            i += 1
+            # Scale the data
+            xtrain = np.asarray(xtrain)
+            ytrain = np.asarray(ytrain)
+            xtrain = xtrain.astype(float)
+            ytrain = ytrain.astype(float)
+            if mean != 0:
+                xtrain = xtrain - mean
+                ytrain = ytrain -mean
+            if sd > 0 and sd != 1:
+                xtrain = xtrain / sd
+                ytrain = ytrain / sd
+            
+            xtrain = torch.Tensor([xtrain]).to(device)
+            ytrain = torch.Tensor(ytrain).to(device)
+        
+            ypred = model(xtrain)
 
-        # Reshape ypred
-        ypred = torch.flatten(ypred)
+            # Reshape ypred
+            ypred = torch.flatten(ypred)
 
-        # Reshape ytrain
-        ytrain = torch.flatten(ytrain)
+            # Reshape ytrain
+            ytrain = torch.flatten(ytrain)
 
-        loss = criterion(ypred, ytrain) / bat
-        loss.backward()
-        loss_sum += loss
+            loss = criterion(ypred, ytrain) / bat
+            loss.backward()
+            loss_sum += loss
 
-        # Process minibatch
-        if i % bat == 0:
-            ibat += 1
-            optimizer.step()
-            optimizer.zero_grad()
-            print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' loss=', '%.8f' % loss_sum, sep='')
-            sys.stdout.flush()
-            loss_sum = 0
-            # Export model state dict every n minibatchs
-            if ibat % n == 0:
-                fout = fo + '.state_dict.' + str(ibat) + '.pt'
-                torch.save(model.state_dict(), fout)
-                # Print learning rate
-                if ln > 0:
-                    for param_group in optimizer.param_groups:
-                        print('lr =', param_group['lr'])
+        # Process the epoch of minibatch
+        optimizer.step()
+        optimizer.zero_grad()
+        print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep + 1, ' loss=', '%.8f' % loss_sum, sep='')
+        sys.stdout.flush()
+        loss_sum = 0
+        # Export model state dict every n minibatchs
+        if ibat % n == 0:
+            fout = fo + '.state_dict.' + str(ibat) + '.pt'
+            torch.save(model.state_dict(), fout)
+            # Print learning rate
+            if ln > 0:
+                for param_group in optimizer.param_groups:
+                    print('lr =', param_group['lr'])
 
-        # Decays the learning rate
-        if ln > 0:
-            scheduler.step()
+    # Decays the learning rate
+    if ln > 0:
+        scheduler.step()
 
 
