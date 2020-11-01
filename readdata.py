@@ -16,9 +16,10 @@ def readfi(fi):
             tem = data[2].reshape(d1, d2)
         return tem
 
-# def readdata(flist, mean = 0, sd = 1):
-def readdata(flist):
+def readdata(flist, n = 1):
     with open(flist, 'r') as f:
+        i = 0
+        dout = []
         for line in f:
             line = line.strip()
             e = line.split('\t')
@@ -42,5 +43,10 @@ def readdata(flist):
                 pred.append(dmat)
 
             # yield output
-            yield [train, pred]
+            dout.append([train, pred])
+            i += 1
+            if i % n == 0:
+                yield dout
+                dout = []
+                i = 0
 
