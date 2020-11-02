@@ -22,10 +22,11 @@ def eprint(msg):
 # Parsing parameters
 try :
     opts, args = getopt.getopt(sys.argv[1:],
-                               'm:s:l:o:n:b:e:t:',
+                               'm:s:l:o:n:b:e:t:r',
                                ['mean=', 'sd=', 'list=', 'out=',
                                 'lr=', 'model=', 'dev=', 'ln=',
-                                'ld=', 'batch=', 'epoch=', 'threads='
+                                'ld=', 'batch=', 'epoch=', 'threads=',
+                                'recover'
                                ]
     )
 except getopt.GetoptError as err :
@@ -42,6 +43,7 @@ ld = 0.5
 ln = 0
 n = 1000
 dev = 'cuda:0'
+recv = 0    # Recover the learning rate (1) or use new learning rate (0)
 fm = ''
 fl = '/dev/stdin'
 fo = ''
@@ -67,6 +69,8 @@ for o, a in opts:
         n = int(a)
     elif o in ('--dev'):
         dev = a
+    elif o in ('-r', '--recover'):
+        recv = 1
     elif o in ('--model'):
         fm = a
     elif o in ('-l', '--list'):
@@ -89,21 +93,31 @@ def scale_group(x):
         x = 19
     return x
 
-model = WLSTM()
-
 # Create a model
-if fm != '':
-    model.load_state_dict(torch.load(fm))
-    model.eval()
+model = WLSTM()
 
 # Send data to GPU
 model.to(device)
 
 # Create loss function and optimizer
-# criterion = nn.CrossEntropyLoss()
 criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr = lrt)
-# optimizer = torch.optim.SGD(model.parameters(), lr=lrt, momentum=0.9)
+
+# Read a saved model
+if fm != '':
+    checkpoint = torch.load(fm)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    epoch = checkpoint['epoch']
+    loss = checkpoint['loss']
+    
+    if recv == 0:
+        # Set new learning rate
+        for g in optimizer.param_groups:
+            g['lr'] = lrt
+
+    model.eval()
+
 
 # Decays the learning rate according to epoch
 scheduler = StepLR(optimizer, step_size = 1, gamma = ld)
@@ -115,7 +129,7 @@ istep = 0
 loss_sum = 0
 for din in readdata(fl, bat):
     ibat += 1
-    for ep in range(epo):
+    for ep in range(1, epo + 1):
         for xtrain, ytrain in din:
             i += 1
             # Scale the data
@@ -150,14 +164,23 @@ for din in readdata(fl, bat):
         optimizer.zero_grad()
 
         # Print epoch and loss information
-        print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep + 1, ' lr=', optimizer.param_groups[0]['lr'], ' loss=', '%.8f' % loss_sum, sep='')
+        print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep, ' lr=', optimizer.param_groups[0]['lr'], ' loss=', '%.8f' % loss_sum, sep='')
         sys.stdout.flush()
         loss_sum = 0
 
-        # Export model state dict every n inputs
+        # Export checkpoint every n inputs
         if i % n == 0:
-            fout = fo + '.state_dict.b_' + str(ibat) + '.e_' + str(ep + 1) + '.pt'
-            torch.save(model.state_dict(), fout)
+            fout = fo + '.b_' + str(ibat) + '.e_' + str(ep) + '.pt'
+            torch.save({
+                'i': i,
+                'bat': bat,
+                'epoch': ep,
+                'istep': istep,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss
+            }, fout
+            )
 
         # Decay the learning rate
         if ln > 0 and i - istep >= ln:
