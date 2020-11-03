@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from datetime import datetime
 from readdata import readdata
 from wlstm import WLSTM
@@ -26,7 +27,7 @@ try :
                                ['mean=', 'sd=', 'list=', 'out=',
                                 'lr=', 'model=', 'dev=', 'ln=',
                                 'ld=', 'batch=', 'epoch=', 'threads=',
-                                'recover'
+                                'recover', 'lp='
                                ]
     )
 except getopt.GetoptError as err :
@@ -38,10 +39,11 @@ sd = 1
 bat = 1    # number of samples in each minibatch
 epo = 1    # number of epoch for each minibatch
 th = 1
-lrt = 0.001
-ld = 0.5
-ln = 0
-n = 1000
+lrt = 0.001    # initial learning rate
+ld = 0.5     # decay rate of learning
+ln = 0    # number of inputs to execute a decay
+lp = 0    # number of patience before decay
+n = 1000    # number of inputs to output model
 dev = 'cuda:0'
 recv = 0    # Recover the learning rate (1) or use new learning rate (0)
 fm = ''
@@ -61,10 +63,12 @@ for o, a in opts:
         epo = int(a)
     elif o in ('--lr'):
         lrt = float(a)
-    elif o in ('--ln'):
-        ln = int(a)
     elif o in ('--ld'):
         ld = float(a)
+    elif o in ('--ln'):
+        ln = int(a)
+    elif o in ('--lp'):
+        lp = int(a)
     elif o in ('-n'):
         n = int(a)
     elif o in ('--dev'):
@@ -80,6 +84,11 @@ for o, a in opts:
     else:
         assert False, 'unhandled option'
 
+# Confirm no more than one schedualer was set
+if ln > 0 and lp > 0:
+    eprint('Selected two schedualer')
+    sys.exit(2)
+    
 # Prepare GPU
 device = torch.device(dev if torch.cuda.is_available() else "cpu")
 # print('Using', device, file = sys.stderr)
@@ -118,9 +127,11 @@ if fm != '':
 
     model.eval()
 
-
-# Decays the learning rate according to epoch
-scheduler = StepLR(optimizer, step_size = 1, gamma = ld)
+# Set the schedualer to decays the learning rate
+if ln > 0:
+    scheduler = StepLR(optimizer, step_size = 1, gamma = ld)
+elif lp > 0:
+    scheduler = ReduceLROnPlateau(optimizer, factor = ld, patience = lp)
 
 # Train the model
 i = 0
@@ -166,7 +177,6 @@ for din in readdata(fl, bat):
         # Print epoch and loss information
         print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep, ' lr=', optimizer.param_groups[0]['lr'], ' loss=', '%.8f' % loss_sum, sep='')
         sys.stdout.flush()
-        loss_sum = 0
 
         # Export checkpoint every n inputs
         if i % n == 0:
@@ -183,7 +193,12 @@ for din in readdata(fl, bat):
             )
 
         # Decay the learning rate
-        if ln > 0 and i - istep >= ln:
-            scheduler.step()
-            istep = i
+        if ln > 0:
+            if i - istep >= ln:
+                scheduler.step()
+                istep = i
+        elif lp > 0:
+            scheduler.step(loss_sum)
 
+        # Reset loss_sum
+        loss_sum = 0
