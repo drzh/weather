@@ -5,6 +5,7 @@
 #     --step2 : step between last time slot of training and the time slot of prediction
 #     --step3 : step between the first time slot of the training group and the first time slot of the next training group
 #     --ns : number of slices of training
+#     --add : additional layer
 
 import sys
 import getopt
@@ -17,10 +18,11 @@ predchs = ['C13',]
 # Parsing parameters
 try:
     opts, args = getopt.getopt(sys.argv[1:],
-                               'n:o:t:p:',
+                               'n:o:t:p:a:',
                                ['s1=', 's2=', 's3=', 'ns=',
-                               'tprefix=', 'pprefix=',
-                                'tsuffix=', 'psuffix=']
+                                'tprefix=', 'pprefix=',
+                                'tsuffix=', 'psuffix=',
+                                'add=']
     )
 except getopt.GetoptError as err:
     print(str(err))
@@ -34,6 +36,7 @@ tprefix = ''
 pprefix = ''
 tsuffix = ''
 psuffix = ''
+add = ''
 
 for o, a in opts:
     if o == '-o':
@@ -46,6 +49,8 @@ for o, a in opts:
         s3 = int(a)
     elif o in ['-n', '--ns']:
         ns = int(a)
+    elif o in ['-a', '--add']:
+        add = a
     elif o == '--tprefix':
         tprefix = a
     elif o == '--pprefix':
@@ -77,6 +82,8 @@ for line in f:
         # add training
         while n < ns:
             fs = ','.join([tprefix + e[t] + '.' + c + tsuffix for c in trainchs])
+            if add != '':
+                fs = fs + ',' + add
             train.append(fs)
             n += 1
             t += s1

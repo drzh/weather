@@ -103,7 +103,7 @@ def scale_group(x):
     return x
 
 # Create a model
-model = WLSTM()
+model = WLSTM(input_dim = 12)
 
 # Send data to GPU
 model.to(device)
