@@ -18,6 +18,8 @@ class WLSTM(nn.Module):
         self.conv2 = nn.Conv2d(160, 256, 3, padding = (1, 1))
         self.conv3 = nn.Conv2d(256, 256, 3, padding = (1, 1))
         self.conv4 = nn.Conv2d(256, 256, 3, padding = (1, 1))
+        # self.conv5 = nn.Conv2d(384, 1024, 1)
+        # self.conv6 = nn.Conv2d(1024, 1, 1)
         self.conv5 = nn.Conv2d(384, 512, 1)
         self.conv6 = nn.Conv2d(512, 1, 1)
         # self.linear = nn.Linear(512 * 64 * 64, 64 * 64)
