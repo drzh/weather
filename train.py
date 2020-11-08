@@ -134,8 +134,8 @@ else:
     sys.exit(2)
 
 # Create loss function and optimizer
-# criterion = nn.MSELoss()
-criterion = nn.CrossEntropyLoss()
+criterion = nn.MSELoss()
+# criterion = nn.CrossEntropyLoss()
 
 # Read a saved model
 if param['fm'] != '':
@@ -163,12 +163,11 @@ i = 0
 ibat = 0
 istep = 0
 loss_sum = 0
+loss = {}
 for din in readdata(param['fl'], param['bat']):
     ibat += 1
     for ep in range(1, param['epo'] + 1):
-        correct = 0
-        total = 0
-        # for xtrain, ytrain in din:
+        floss = 0
         for dtrain in din:
             i += 1
             xtrain = dtrain[:-1]
@@ -186,33 +185,40 @@ for din in readdata(param['fl'], param['bat']):
                 ytrain = ytrain / param['sd']
             
             xtrain = torch.Tensor([xtrain]).to(device)
-            # ytrain = torch.Tensor(ytrain).to(device)
+            ytrain = torch.Tensor(ytrain).to(device)
         
             ypred = model(xtrain)
 
-            ytrain = ytrain.flatten()
-            ylabel = torch.Tensor([scale_group(x) for x in ytrain]).long()
-            ylabel = ylabel.to(device)
+            # ytrain = ytrain.flatten()
+            # ylabel = torch.Tensor([scale_group(x) for x in ytrain]).long()
+            # ylabel = ylabel.to(device)
 
-            # # Reshape ytrain
-            # ytrain = torch.flatten(ytrain)
+            # Reshape ytrain
+            ytrain = ytrain.view(-1)
 
-            # loss = criterion(ypred, ytrain) / param['bat']
-            loss = criterion(ypred, ylabel) / param['bat']
+            # # Calculate loss for each unit
+            # for i in range(ypred.size(0)):
+            #     loss[i] = criterion(ypred[i:(i + 1)], ytrain[i:(i + 1)] / param['bat'])
+            #     loss[i].backward(retain_graph=True)
+            #     loss_sum += loss[i]
+                
+            # loss = criterion(ypred, ylabel) / param['bat']
+            loss = criterion(ypred, ytrain) / param['bat']
             loss.backward()
             loss_sum += loss
 
-            # Calculate corrected and total values
-            _, predicted = torch.max(ypred.data, 1)
-            total += ylabel.size(0)
-            correct += (predicted == ylabel).sum().item()
+            # # Calculate corrected and total values
+            # _, predicted = torch.max(ypred.data, 1)
+            # total += ylabel.size(0)
+            # correct += (predicted == ylabel).sum().item()
             
         # Process the epoch of minibatch
         optimizer.step()
         optimizer.zero_grad()
 
         # Print epoch and loss information
-        print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep, ' lr=', optimizer.param_groups[0]['lr'], ' loss=', '%.8f' % loss_sum, ' accuracy=', correct, '/', total, '=', '%.5f' % (correct / total), sep='')
+        # print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep, ' lr=', optimizer.param_groups[0]['lr'], ' loss=', '%.8f' % loss_sum, ' accuracy=', correct, '/', total, '=', '%.5f' % (correct / total), sep='')
+        print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep, ' lr=', optimizer.param_groups[0]['lr'], ' loss=', '%.8f' % loss_sum, sep='')
         sys.stdout.flush()
 
         # Export checkpoint every n inputs

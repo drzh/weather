@@ -59,6 +59,15 @@ for o, a in opts:
 # Prepare GPU
 device = torch.device(param['dev'] if torch.cuda.is_available() else "cpu")
 
+# Function to scale temperature (200 ~ 299K) to group (0 ~ 19)
+def group_to_tem(x):
+    x = np.round((x - 200) / 5)
+    if x < 0:
+        x = 0
+    elif x > 19:
+        x = 19
+    return x
+
 # Create a model
 model = WLSTM(input_dim = 12)
 
@@ -84,13 +93,17 @@ for din in readdata(param['fl']):
             
         xtrain = torch.Tensor([xtrain]).to(device)
         ypred = model(xtrain)
-        ypred = ypred.detach().numpy()
+        # _, predicted = torch.max(ypred.data, 1)
+        # predicted = predicted.detach().numpy()
+        # ytem = predicted * 5 + 200
+        ytem = ypred.detach().numpy()
+        ytem = ytem * param['sd'] + param['mean']
 
         if param['fo'] != '':
             with lzma.open(param['fo'], 'wb') as f:
-                pickle.dump(ypred, f)
-
-        print(ypred)
-        print('min:', np.amin(ypred))
-        print('max:', np.amax(ypred))
-        print('mean:', np.mean(ypred))
+                pickle.dump(ytem, f)
+                
+        print(ytem)
+        print('min:', np.amin(ytem))
+        print('max:', np.amax(ytem))
+        print('mean:', np.mean(ytem))
