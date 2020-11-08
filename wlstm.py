@@ -21,7 +21,7 @@ class WLSTM(nn.Module):
         # self.conv5 = nn.Conv2d(384, 1024, 1)
         # self.conv6 = nn.Conv2d(1024, 1, 1)
         self.conv5 = nn.Conv2d(384, 512, 1)
-        self.conv6 = nn.Conv2d(512, 1, 1)
+        self.conv6 = nn.Conv2d(512, 20, 1)
         # self.linear = nn.Linear(512 * 64 * 64, 64 * 64)
 
         # ConvLSTM model
@@ -81,9 +81,11 @@ class WLSTM(nn.Module):
         y = F.relu(self.attn1(y))
         y = F.relu(self.attn2(y))
 
-        # Convert to 64 x 64 to represent probability for each unit
+        # Convert to b x 20 x 64 x 64 to represent probability
         y = self.conv6(y)
-        y = y.view(-1)
+        y = y.flatten(start_dim = 2)
+        y = y.transpose(1, 2)
+        y = y.flatten(start_dim = 0, end_dim = 1)
         # y = self.linear(y)
         
         return y

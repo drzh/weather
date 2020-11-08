@@ -109,7 +109,7 @@ device = torch.device(param['dev'] if torch.cuda.is_available() else "cpu")
 
 # Function to scale temperature (200 ~ 299K) to group (0 ~ 19)
 def scale_group(x):
-    x = torch.round((x / 100 - 200) / 5)
+    x = np.round((x - 200) / 5)
     if x < 0:
         x = 0
     elif x > 19:
@@ -134,7 +134,8 @@ else:
     sys.exit(2)
 
 # Create loss function and optimizer
-criterion = nn.MSELoss()
+# criterion = nn.MSELoss()
+criterion = nn.CrossEntropyLoss()
 
 # Read a saved model
 if param['fm'] != '':
@@ -165,8 +166,13 @@ loss_sum = 0
 for din in readdata(param['fl'], param['bat']):
     ibat += 1
     for ep in range(1, param['epo'] + 1):
-        for xtrain, ytrain in din:
+        correct = 0
+        total = 0
+        # for xtrain, ytrain in din:
+        for dtrain in din:
             i += 1
+            xtrain = dtrain[:-1]
+            ytrain = dtrain[-1]
             # Scale the data
             xtrain = np.asarray(xtrain)
             ytrain = np.asarray(ytrain)
@@ -180,27 +186,33 @@ for din in readdata(param['fl'], param['bat']):
                 ytrain = ytrain / param['sd']
             
             xtrain = torch.Tensor([xtrain]).to(device)
-            ytrain = torch.Tensor(ytrain).to(device)
+            # ytrain = torch.Tensor(ytrain).to(device)
         
             ypred = model(xtrain)
 
-            # # Reshape ypred
-            # ypred = torch.flatten(ypred)
+            ytrain = ytrain.flatten()
+            ylabel = torch.Tensor([scale_group(x) for x in ytrain]).long()
+            ylabel = ylabel.to(device)
 
-            # Reshape ytrain
+            # # Reshape ytrain
             # ytrain = torch.flatten(ytrain)
-            ytrain = ytrain.view(-1)
 
-            loss = criterion(ypred, ytrain) / param['bat']
+            # loss = criterion(ypred, ytrain) / param['bat']
+            loss = criterion(ypred, ylabel) / param['bat']
             loss.backward()
             loss_sum += loss
 
+            # Calculate corrected and total values
+            _, predicted = torch.max(ypred.data, 1)
+            total += ylabel.size(0)
+            correct += (predicted == ylabel).sum().item()
+            
         # Process the epoch of minibatch
         optimizer.step()
         optimizer.zero_grad()
 
         # Print epoch and loss information
-        print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep, ' lr=', optimizer.param_groups[0]['lr'], ' loss=', '%.8f' % loss_sum, sep='')
+        print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep, ' lr=', optimizer.param_groups[0]['lr'], ' loss=', '%.8f' % loss_sum, ' accuracy=', correct, '/', total, '=', '%.5f' % (correct / total), sep='')
         sys.stdout.flush()
 
         # Export checkpoint every n inputs

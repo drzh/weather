@@ -21,9 +21,10 @@ def readfi(fi):
 # Process each line of files
 def readline(line):
     line = line.strip()
-    e = line.split('\t')
-    ftset = e[:-1]
-    fp = e[-1]
+    ftset = line.split('\t')
+    # e = line.split('\t')
+    # ftset = e[:-1]
+    # fp = e[-1]
     train = []
     pred = []
 
@@ -36,12 +37,14 @@ def readline(line):
             tc.append(dmat)
         train.append(tc)
 
-    # Process prediction files
-    for f in fp.split(','):
-        dmat = readfi(f)
-        pred.append(dmat)
+    return train
 
-    return [train, pred]
+    # # Process prediction files
+    # for f in fp.split(','):
+    #     dmat = readfi(f)
+    #     pred.append(dmat)
+
+    # return [train, pred]
 
 # Process lines
 def readlines(lines):
