@@ -17,81 +17,95 @@ from readdata import readdata
 from wlstm import WLSTM
 
 # Function to print error
-def eprint(msg):
-    print(msg, file = sys.stderr)
+def eprint(*argv):
+    print(*argv, file = sys.stderr)
+
+# Initiate default parameters
+param = {
+    'mean': 0,
+    'sd': 1,
+    'bat': 1,    # number of samples in each minibatch
+    'epo': 1,    # number of epoch for each minibatch
+    'th': 1,
+    'lrt': 0.001,    # initial learning rate
+    'ld': 0.5,     # decay rate of learning
+    'ln': 0,    # number of inputs to execute a decay
+    'lp': 0,    # number of patience before decay
+    'opt': 'adam',    # optimizer
+    'mmt': 1,    # momentum for SGD
+    'n': 1000,    # number of inputs to output model
+    'dev': 'cuda:0',
+    'recv': 0,    # Recover the learning rate (1) or use new learning rate (0)
+    'fm': '',
+    'fl': '/dev/stdin',
+    'fo': '',
+}
 
 # Parsing parameters
 try :
     opts, args = getopt.getopt(sys.argv[1:],
-                               'm:s:l:o:n:b:e:t:r',
+                               'n:b:t:r',
                                ['mean=', 'sd=', 'list=', 'out=',
                                 'lr=', 'model=', 'dev=', 'ln=',
                                 'ld=', 'batch=', 'epoch=', 'threads=',
-                                'recover', 'lp='
+                                'recover', 'lp=', 'opt=', 'mmt='
                                ]
     )
 except getopt.GetoptError as err :
     eprint(str(err))
     sys.exit(2)
 
-mean = 0
-sd = 1
-bat = 1    # number of samples in each minibatch
-epo = 1    # number of epoch for each minibatch
-th = 1
-lrt = 0.001    # initial learning rate
-ld = 0.5     # decay rate of learning
-ln = 0    # number of inputs to execute a decay
-lp = 0    # number of patience before decay
-n = 1000    # number of inputs to output model
-dev = 'cuda:0'
-recv = 0    # Recover the learning rate (1) or use new learning rate (0)
-fm = ''
-fl = '/dev/stdin'
-fo = ''
-
 for o, a in opts:
-    if o in ('-m', '--mean'):
-        mean = float(a)
-    elif o in ('-s', '--sd'):
-        sd = float(a)
+    if o in ('--mean'):
+        param['mean'] = float(a)
+    elif o in ('--sd'):
+        param['sd'] = float(a)
     elif o in ('-b', '--batch'):
-        bat = int(a)
+        param['bat'] = int(a)
     elif o in ('-t', '--threads'):
-        th = int(a)
-    elif o in ('-3', '--epoch'):
-        epo = int(a)
+        param['th'] = int(a)
+    elif o in ('--epoch'):
+        param['epo'] = int(a)
     elif o in ('--lr'):
-        lrt = float(a)
+        param['lrt'] = float(a)
     elif o in ('--ld'):
-        ld = float(a)
+        param['ld'] = float(a)
     elif o in ('--ln'):
-        ln = int(a)
+        param['ln'] = int(a)
     elif o in ('--lp'):
-        lp = int(a)
+        param['lp'] = int(a)
+    elif o in ('--opt'):
+        param['opt'] = a
+    elif o in ('--mmt'):
+        param['mmt'] = float(a)
     elif o in ('-n'):
-        n = int(a)
+        param['n'] = int(a)
     elif o in ('--dev'):
-        dev = a
+        param['dev'] = a
     elif o in ('-r', '--recover'):
-        recv = 1
+        param['recv'] = 1
     elif o in ('--model'):
-        fm = a
-    elif o in ('-l', '--list'):
-        fl = a
-    elif o in ('-o', '--out'):
-        fo = a
+        param['fm'] = a
+    elif o in ('--list'):
+        param['fl'] = a
+    elif o in ('--out'):
+        param['fo'] = a
     else:
         assert False, 'unhandled option'
 
+# Check parameters
 # Confirm no more than one schedualer was set
-if ln > 0 and lp > 0:
+if param['ln'] > 0 and param['lp'] > 0:
     eprint('Selected two schedualer')
+    sys.exit(2)
+# check optimizer
+if param['opt'] not in ('adam', 'sgd'):
+    eprint('Optimizer:', param['opt'])
+    eprint('Optimizer must be: adam, sgd')
     sys.exit(2)
     
 # Prepare GPU
-device = torch.device(dev if torch.cuda.is_available() else "cpu")
-# print('Using', device, file = sys.stderr)
+device = torch.device(param['dev'] if torch.cuda.is_available() else "cpu")
 
 # Function to scale temperature (200 ~ 299K) to group (0 ~ 19)
 def scale_group(x):
@@ -108,39 +122,49 @@ model = WLSTM(input_dim = 12)
 # Send data to GPU
 model.to(device)
 
+# Creater optimizer
+if param['opt'] == 'adam':
+    optimizer = torch.optim.Adam(model.parameters(), lr = param['lrt'])
+elif param['opt'] == 'sgd':
+    optimizer = torch.optim.SGD(model.parameters(), lr = param['lrt'],
+                                momentum = param['mmt'], nesterov = True)
+else:
+    eprint('Optimizer:', param['opt'])
+    eprint('Optimizer must be: adam, sgd')
+    sys.exit(2)
+
 # Create loss function and optimizer
 criterion = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr = lrt)
 
 # Read a saved model
-if fm != '':
-    checkpoint = torch.load(fm)
+if param['fm'] != '':
+    checkpoint = torch.load(param['fm'])
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     epoch = checkpoint['epoch']
     loss = checkpoint['loss']
     
-    if recv == 0:
+    if param['recv'] == 0:
         # Set new learning rate
         for g in optimizer.param_groups:
-            g['lr'] = lrt
+            g['lr'] = param['lrt']
 
     model.eval()
 
 # Set the schedualer to decays the learning rate
-if ln > 0:
-    scheduler = StepLR(optimizer, step_size = 1, gamma = ld)
-elif lp > 0:
-    scheduler = ReduceLROnPlateau(optimizer, factor = ld, patience = lp)
+if param['ln'] > 0:
+    scheduler = StepLR(optimizer, step_size = 1, gamma = param['ld'])
+elif param['lp'] > 0:
+    scheduler = ReduceLROnPlateau(optimizer, factor = param['ld'], patience = param['lp'])
 
 # Train the model
 i = 0
 ibat = 0
 istep = 0
 loss_sum = 0
-for din in readdata(fl, bat):
+for din in readdata(param['fl'], param['bat']):
     ibat += 1
-    for ep in range(1, epo + 1):
+    for ep in range(1, param['epo'] + 1):
         for xtrain, ytrain in din:
             i += 1
             # Scale the data
@@ -148,25 +172,26 @@ for din in readdata(fl, bat):
             ytrain = np.asarray(ytrain)
             xtrain = xtrain.astype(float)
             ytrain = ytrain.astype(float)
-            if mean != 0:
-                xtrain = xtrain - mean
-                ytrain = ytrain -mean
-            if sd > 0 and sd != 1:
-                xtrain = xtrain / sd
-                ytrain = ytrain / sd
+            if param['mean'] != 0:
+                xtrain = xtrain - param['mean']
+                ytrain = ytrain - param['mean']
+            if param['sd'] > 0 and param['sd'] != 1:
+                xtrain = xtrain / param['sd']
+                ytrain = ytrain / param['sd']
             
             xtrain = torch.Tensor([xtrain]).to(device)
             ytrain = torch.Tensor(ytrain).to(device)
         
             ypred = model(xtrain)
 
-            # Reshape ypred
-            ypred = torch.flatten(ypred)
+            # # Reshape ypred
+            # ypred = torch.flatten(ypred)
 
             # Reshape ytrain
-            ytrain = torch.flatten(ytrain)
+            # ytrain = torch.flatten(ytrain)
+            ytrain = ytrain.view(-1)
 
-            loss = criterion(ypred, ytrain) / bat
+            loss = criterion(ypred, ytrain) / param['bat']
             loss.backward()
             loss_sum += loss
 
@@ -179,11 +204,11 @@ for din in readdata(fl, bat):
         sys.stdout.flush()
 
         # Export checkpoint every n inputs
-        if i % n == 0:
-            fout = fo + '.b_' + str(ibat) + '.e_' + str(ep) + '.pt'
+        if i % param['n'] == 0:
+            fout = param['fo'] + '.b_' + str(ibat) + '.e_' + str(ep) + '.pt'
             torch.save({
                 'i': i,
-                'bat': bat,
+                'bat': ibat,
                 'epoch': ep,
                 'istep': istep,
                 'model_state_dict': model.state_dict(),
@@ -193,11 +218,11 @@ for din in readdata(fl, bat):
             )
 
         # Decay the learning rate
-        if ln > 0:
-            if i - istep >= ln:
+        if param['ln'] > 0:
+            if i - istep >= param['ln']:
                 scheduler.step()
                 istep = i
-        elif lp > 0:
+        elif param['lp'] > 0:
             scheduler.step(loss_sum)
 
         # Reset loss_sum

@@ -81,8 +81,9 @@ class WLSTM(nn.Module):
         y = F.relu(self.attn1(y))
         y = F.relu(self.attn2(y))
 
-        # Convert to 150 x 64 x 64 to represent probability for each unit
+        # Convert to 64 x 64 to represent probability for each unit
         y = self.conv6(y)
+        y = y.view(-1)
         # y = self.linear(y)
         
         return y
