@@ -52,11 +52,11 @@ class WLSTM(nn.Module):
         for b in x:
             # Convlution and pooling to get 128x64x64 (c x h x w)
             y = b
-            y = F.relu(self.conv1(y))
+            y = torch.tanh(self.conv1(y))
             y = F.max_pool2d(y, 2)
-            y = F.relu(self.conv2(y))
-            y = F.relu(self.conv3(y))
-            y = F.relu(self.conv4(y))
+            y = torch.tanh(self.conv2(y))
+            y = torch.tanh(self.conv3(y))
+            y = torch.tanh(self.conv4(y))
             y = F.max_pool2d(y, 2)
             xb.append(y)
 
@@ -66,18 +66,18 @@ class WLSTM(nn.Module):
         h = last_state[0][0]
 
         # # convert b x 384 x 64 x 64 to b x 2048 x 64 x 64
-        y = F.relu(self.conv5(h))
+        y = torch.tanh(self.conv5(h))
         # y = h
         
         # Axial self attension
-        y = self.attn1(y)
-        y = self.attn2(y)
-        y = self.attn1(y)
-        y = self.attn2(y)
-        y = self.attn1(y)
-        y = self.attn2(y)
-        y = self.attn1(y)
-        y = self.attn2(y)
+        y = torch.tanh(self.attn1(y))
+        y = torch.tanh(self.attn2(y))
+        y = torch.tanh(self.attn1(y))
+        y = torch.tanh(self.attn2(y))
+        y = torch.tanh(self.attn1(y))
+        y = torch.tanh(self.attn2(y))
+        y = torch.tanh(self.attn1(y))
+        y = torch.tanh(self.attn2(y))
 
         # Convert to b x 20 x 64 x 64 to represent probability
         y = self.conv6(y)
