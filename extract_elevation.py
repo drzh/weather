@@ -4,8 +4,8 @@ import sys
 import getopt
 import lzma
 import numpy as np
-import pandas as pd
-import itertools
+# import pandas as pd
+# import itertools
 import pickle
 
 # Parsing parameters
@@ -60,25 +60,36 @@ if fo == '':
     print('No output file', file = sys.stderr)
     sys.exit(1)
 
+latbs = [round(x, 1) for x in np.arange(latmin, latmax, step)]
+lonbs = [round(x, 1) for x in np.arange(lonmin, lonmax, step)]
+dsum = {}
+dn = {}
+# Initiate dsum and dn
+for lat in latbs:
+    dsum[lat] = {}
+    dn[lat] = {}
+    for lon in lonbs:
+        dsum[lat][lon] = 0
+        dn[lat][lon] = 0
+        
 with open(fi, 'r') as f:
-    dataall = pd.read_csv(f, sep='\t', header=None)
-    dataall.columns = ['lat', 'lon', 'data']
-    dataall['lat'] = np.floor(dataall['lat'] / step) * step
-    dataall['lat'] = np.round(dataall['lat'])
-    dataall['lon'] = np.floor(dataall['lon'] / step) * step
-    dataall['lon'] = np.round(dataall['lon'])
-    datamean = pd.DataFrame(dataall.groupby(['lat', 'lon'])['data'].mean().reset_index())
-    latbs = [round(x, 1) for x in np.arange(latmin, latmax, step)]
-    lonbs = [round(x, 1) for x in np.arange(lonmin, lonmax, step)]
-    latlon = pd.DataFrame(list(itertools.product(latbs, lonbs)), columns = ['lat', 'lon'])
+    for line in f:
+        lat, lon, elev = line.strip().split('\t')
+        lat = np.round(float(lat), 1)
+        lon = np.round(float(lon), 1)
+        elev = float(elev)
+        if lat >= latmin and lat < latmax and lon >= lonmin and lon < lonmax:
+            # Re-scale the data
+            elev = elev * dscale
+            
+            dsum[lat][lon] += elev
+            dn[lat][lon] += 1
 
-    # Merge latlon and datamean to ensure the datamean was ordered by latlon
-    datamean = pd.merge(latlon, datamean, on=['lat', 'lon'], how='left')
-    datamean = datamean.fillna(0)
-    if latlon.shape[0] == datamean.shape[0] :
-        vec = np.array(datamean['data'], dtype=np.float32)
-        dataout = [latbs, lonbs, vec]
-        with lzma.open(fo, 'wb') as f :
-            pickle.dump(dataout, f)
-    else :
-        print(fi, 'is NA ', datamean.shape, file = sys.stderr)
+dout = []
+for lat in latbs:
+    for lon in lonbs:
+        dout.append(dsum[lat][lon] / dn[lat][lon] if dn[lat][lon] > 0 else 0)
+
+dout = np.array(dout, dtype = np.float32)
+with lzma.open(fo, 'wb') as f:
+    pickle.dump([latbs, lonbs, dout], f)
