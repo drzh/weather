@@ -19,6 +19,7 @@ def eprint(*argv):
 param = {
     'mean': 0,
     'sd': 1,
+    'ch': 12,
     'th': 1,
     'dev': 'cpu',
     'fm': '',
@@ -29,9 +30,9 @@ param = {
 # Parsing parameters
 try :
     opts, args = getopt.getopt(sys.argv[1:],
-                               't:',
+                               'c:t:',
                                ['mean=', 'sd=', 'list=', 'out=',
-                                'model=', 'dev=', 'threads=',
+                                'model=', 'dev=', 'threads=', 'ch=',
                                ]
     )
 except getopt.GetoptError as err :
@@ -43,6 +44,8 @@ for o, a in opts:
         param['mean'] = float(a)
     elif o in ('--sd'):
         param['sd'] = float(a)
+    elif o in ('-c', '--ch'):
+        param['ch'] = int(a)
     elif o in ('-t', '--threads'):
         param['th'] = int(a)
     elif o in ('--dev'):
@@ -59,17 +62,17 @@ for o, a in opts:
 # Prepare GPU
 device = torch.device(param['dev'] if torch.cuda.is_available() else "cpu")
 
-# Function to scale temperature (200 ~ 299K) to group (0 ~ 19)
-def group_to_tem(x):
-    x = np.round((x - 200) / 5)
-    if x < 0:
-        x = 0
-    elif x > 19:
-        x = 19
-    return x
+# # Function to scale temperature (200 ~ 299K) to group (0 ~ 19)
+# def group_to_tem(x):
+#     x = np.round((x - 200) / 5)
+#     if x < 0:
+#         x = 0
+#     elif x > 19:
+#         x = 19
+#     return x
 
 # Create a model
-model = WLSTM(input_dim = 12)
+model = WLSTM(input_dim = param['ch'])
 
 # Send data to GPU
 model.to(device)
@@ -93,9 +96,11 @@ for din in readdata(param['fl']):
             
         xtrain = torch.Tensor([xtrain]).to(device)
         ypred = model(xtrain)
+
         # _, predicted = torch.max(ypred.data, 1)
         # predicted = predicted.detach().numpy()
         # ytem = predicted * 5 + 200
+
         ytem = ypred.detach().numpy()
         ytem = ytem * param['sd'] + param['mean']
 
