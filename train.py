@@ -22,6 +22,7 @@ def eprint(*argv):
 
 # Initiate default parameters
 param = {
+    'ch': 12,
     'mean': 0,
     'sd': 1,
     'bat': 1,    # number of samples in each minibatch
@@ -44,11 +45,12 @@ param = {
 # Parsing parameters
 try :
     opts, args = getopt.getopt(sys.argv[1:],
-                               'n:b:t:r',
+                               'c:n:b:t:r',
                                ['mean=', 'sd=', 'list=', 'out=',
                                 'lr=', 'model=', 'dev=', 'ln=',
                                 'ld=', 'batch=', 'epoch=', 'threads=',
-                                'recover', 'lp=', 'opt=', 'mmt='
+                                'recover', 'lp=', 'opt=', 'mmt=',
+                                'ch='
                                ]
     )
 except getopt.GetoptError as err :
@@ -60,6 +62,8 @@ for o, a in opts:
         param['mean'] = float(a)
     elif o in ('--sd'):
         param['sd'] = float(a)
+    elif o in ('-c', '--ch'):
+        param['ch'] = int(a)
     elif o in ('-b', '--batch'):
         param['bat'] = int(a)
     elif o in ('-t', '--threads'):
@@ -103,7 +107,7 @@ if param['opt'] not in ('adam', 'sgd'):
     eprint('Optimizer:', param['opt'])
     eprint('Optimizer must be: adam, sgd')
     sys.exit(2)
-    
+
 # Prepare GPU
 device = torch.device(param['dev'] if torch.cuda.is_available() else "cpu")
 
@@ -117,7 +121,7 @@ def scale_group(x):
     return x
 
 # Create a model
-model = WLSTM(input_dim = 12)
+model = WLSTM(input_dim = param['ch'])
 
 # Send data to GPU
 model.to(device)
