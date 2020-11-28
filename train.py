@@ -174,54 +174,32 @@ for din in readdata(param['fl'], param['bat']):
         floss = 0
         for dtrain in din:
             i += 1
-            xtrain = dtrain[:-1]
-            ytrain = dtrain[-1]
+            xtrain = torch.tensor([dtrain[:-1]], dtype = torch.float32, device = device)
+            ytrain = torch.tensor(dtrain[-1], dtype = torch.float32, device = device)
+
             # Scale the data
-            xtrain = np.asarray(xtrain)
-            ytrain = np.asarray(ytrain)
-            xtrain = xtrain.astype(float)
-            ytrain = ytrain.astype(float)
             if param['mean'] != 0:
                 xtrain = xtrain - param['mean']
                 ytrain = ytrain - param['mean']
             if param['sd'] > 0 and param['sd'] != 1:
                 xtrain = xtrain / param['sd']
                 ytrain = ytrain / param['sd']
-            
-            xtrain = torch.Tensor([xtrain]).to(device)
-            ytrain = torch.Tensor(ytrain).to(device)
-        
-            ypred = model(xtrain)
 
-            # ytrain = ytrain.flatten()
-            # ylabel = torch.Tensor([scale_group(x) for x in ytrain]).long()
-            # ylabel = ylabel.to(device)
+            ypred = model(xtrain)
 
             # Reshape ytrain
             ytrain = ytrain.view(-1)
 
-            # # Calculate loss for each unit
-            # for i in range(ypred.size(0)):
-            #     loss[i] = criterion(ypred[i:(i + 1)], ytrain[i:(i + 1)] / param['bat'])
-            #     loss[i].backward(retain_graph=True)
-            #     loss_sum += loss[i]
-                
             # loss = criterion(ypred, ylabel) / param['bat']
             loss = criterion(ypred, ytrain) / param['bat']
             loss.backward()
             loss_sum += loss
 
-            # # Calculate corrected and total values
-            # _, predicted = torch.max(ypred.data, 1)
-            # total += ylabel.size(0)
-            # correct += (predicted == ylabel).sum().item()
-            
         # Process the epoch of minibatch
         optimizer.step()
         optimizer.zero_grad()
 
         # Print epoch and loss information
-        # print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep, ' lr=', optimizer.param_groups[0]['lr'], ' loss=', '%.8f' % loss_sum, ' accuracy=', correct, '/', total, '=', '%.5f' % (correct / total), sep='')
         print(datetime.now().strftime('%H:%M:%S'), ' input=', i, ' batch=', ibat, ' epoch=', ep, ' lr=', optimizer.param_groups[0]['lr'], ' loss=', '%.8f' % loss_sum, sep='')
         sys.stdout.flush()
 

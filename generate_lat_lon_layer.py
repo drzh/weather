@@ -20,6 +20,7 @@ latmat = np.squeeze(np.repeat([lat], dlon, axis = 1))
 lonmat = np.squeeze(np.repeat([lon], dlat, axis = 0).reshape(1, -1))
 latmat = np.array(latmat * 100, dtype = np.int)
 lonmat = np.array(lonmat * 100, dtype = np.int)
+lonmat = np.negative(lonmat)
 
 with lzma.open(folat, 'wb') as f:
     pickle.dump([lat, lon, latmat], f)
