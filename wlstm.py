@@ -53,11 +53,13 @@ class WLSTM(nn.Module):
             # Convlution and pooling to get 128x64x64 (c x h x w)
             y = b
             y = torch.tanh(self.conv1(y))
-            y = F.max_pool2d(y, 2)
+            # y = F.max_pool2d(y, 2)
+            y = F.avg_pool2d(y, 2)
             y = torch.tanh(self.conv2(y))
             y = torch.tanh(self.conv3(y))
             y = torch.tanh(self.conv4(y))
-            y = F.max_pool2d(y, 2)
+            # y = F.max_pool2d(y, 2)
+            y = F.avg_pool2d(y, 2)
             xb.append(y)
 
         # b x t x 256 x 64 x 64 to get through ConvLSTM
